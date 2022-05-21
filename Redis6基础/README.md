@@ -6,6 +6,7 @@
 - 支持持久化
 - 默认有 16 个库
 - 常用数据类型：`String List Set Hash Zset`
+- Redis6 新数据类型：`Bitmaps HyperLogLog Geospatial`
 
 ## Redis 常用命令与数据结构
 
@@ -13,6 +14,9 @@
 
 - 服务端：`redis-server`，后面可以跟配置文件路径，默认端口 `6379`
 - 客户端：`redis-cli`
+- 密码：
+    - 设置 `config set requirepass xxx`
+    - 获取 `config get requirepass`
 
 ### DB
 
@@ -218,3 +222,99 @@ key-->value
 - `zrem key value` 删除 key 对应的有序集合中，值为 value 的元素
 - `zcount key min max` 统计 key 对应的有序集合中，分数在 [min, max] 区间的元素个数
 - `zrank key value` 返回 value 在 key 对应的集合中的排名（从 0 开始）
+
+### Bitmaps
+
+Bitmaps 本身不是一种数据类型，是可以进行位操作的字符串，能够有效提高内存使用率和开发效率（可以理解成 char[]，每个元素都是 0/1）
+
+第一次初始化时，如果 offset 特别大，那么整个初始化过程执行会比较慢，可能会造成 redis 的阻塞
+
+> 与 Set 的比较：
+>
+> 1. 如果用户总量、活跃量都很大，Bitmaps 更节省内存
+> 2. 如果用户总量很大，但是活跃量很少（大量僵尸用户），Set 更好，因为此时 Bitmaps 大部分位都是 0
+
+- `setbit key offset value` 给第 offset 位置 0 或 1
+- `getbit key offset` 获取第 offset 位的值
+- `bitcount key [start end]` 获取**字节**在 [start, end] 范围内的 bit 为 1 的数量（注意这里是操作的 byte）
+- `bitop and|or|xor|not destkey sourcekey1 sourcekey2 ...` 将多个 Bitmaps 的集合操作结果存储于目的 Bitmaps
+
+### HyperLogLog
+
+用于解决基数问题（例如统计独立 IP 访问次数、搜索记录数等去重和计数问题），利用 hash、set、bitmaps，或者 MySQL 都能精确地解决，但是会占用很多空间。而 HyperLogLog 采用基数统计的方法，通过降低一定的精度来平衡存储空间；在输入元素的数量很大时，计算基数所需的空间总是固定、很小的。
+
+每个 HyperLogLog 键只需要 12KB 内存，可以计算接近 $2^{64}$ 个不同元素的基数；但是 HyperLogLog 只能根据输入元素来计算基数，并不储存基数本身，所以不能像 Set 那样，返回输入的各个元素。
+
+- `pfadd key element1 element2 ...` 添加指定元素，并返回是否成功添加（重复则返回 0）
+- `pfcount key` 统计总数的近似数
+- `pfmerge destkey sourcekey1 sourcekey2 ...` 将一个或多个 HLL 合并后的结果存储在另一个 HLL 中
+
+### Geospatial
+
+用于地理位置的存储，存储的是一个二维坐标（经纬度）。
+
+- `geoadd key longitude latitude member ...`
+
+    有效精度为 [-180, 180]，有效纬度为 [-85.05112878, 85.05112878]
+
+- `geopos key member ...` 取出地理坐标
+
+- `geodist key member1 member2 ... [m|km|ft|mi]` 获取两个位置之间的直线距离
+
+- `georadius key longitude latitude radius m|km|ft|mi` 以给定的经纬度为中心，找出指定半径内 key 中存储的元素
+
+## 配置文件
+
+- 单位定义
+
+- include
+
+- module
+
+- 网络相关配置
+
+    - bind
+
+    - protected-mode 保护模式，开启后只能本地连接
+
+    - port
+
+    - tcp-backlog 连接队列，保存了**正在进行三次握手和已完成三次握手**的客户端，在高并发下需要一个高 backlog 值来避免慢客户端连接问题
+
+        > Linux 内核会将这个值减小到 /proc/sys/net/core/somaxconn，需要增大 /proc/sys/net/core/somaxconn 和 /proc/sys/net/ipv4/tcp_max_syn_backlog 来达到想要的效果
+
+    - timeout 空闲连接断开的时间
+
+    - tcp-keepalive 心跳检测时间周期，检测连接是否还存活
+
+- general
+
+    - daemonize 后台启动
+    - pidfile 进程号存储文件
+    - loglevel 日志级别
+    - logfile 日志输出文件路径
+    - database 数据库数量（默认 16）
+
+- security
+
+- limits
+
+    - maxclients 同时可以和多少客户端连接
+    
+        
+    
+    - maxmemory-policy 移除连接的相关规则（volatile-lru、allkeys-lru、volatile-random、allkeys-random、volatile-ttl、noeviction）
+    
+    - maxmemory-samples 样本数量，LRU 算法和最小 ttl 算法并非都是精确的算法，而是估算值，通过设置样本的大小，redis 默认会检查这么多个 key 并选择其中 LRU 的那个
+    
+        一般设置 3-7，数值越小样本越不准确，但性能消耗最小
+
+## 发布和订阅
+
+发布订阅（pub/sub）是一种消息通信模式：发送者（pub）发送消息，订阅者（sub）接收消息。客户端可以订阅任意数量的**频道（Channel）**，发送者向频道发送消息。
+
+发布的消息没有持久化，客户端只能收到订阅后发布的消息
+
+- `subscribe channel` 订阅 channel
+- `publish channel xxx` 向 channel 发布
+

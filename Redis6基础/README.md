@@ -152,14 +152,16 @@ key-->value
 
 底层数据结构：**ziplist（压缩列表）和 hashtable（哈希表），当 field-value 长度较短且个数较少时，使用 ziplist，否则使用 hashtable**
 
-- `hset key filed value` 为 key 对应 hash 的 field 赋值 value
-- `hget key filed` 从 key 对应 hash 的 field 取出 value
+- `hset key field value` 为 key 对应 hash 的 field 赋值 value
+- `hget key field` 从 key 对应 hash 的 field 取出 value
 - `hmset k1 f1 v1 f2 v2 ...` 批量向 key 对应 hash 中插入映射
 - `hexists key field` 查询 key 对应 hash 是否存在 field
 - `hkeys key` 列出 key 对应 hash 的所有 field
 - `hvals key` 列出 key 对应 hash 的所有 value
 - `hincrby key field increment` 使 key 对应 hash 的 field 的值加上相应的值
 - `hsetnx key field value` 为 key 对应 hash 的 field 赋值 value（仅当 field 不存在）
+- `hlen key` 查看 key 对应的 `field-value` 数量
+- `hgetall key` 获取 key 对应的所有 `field-value` 对
 
 ### Zset（Sorted Set）
 
@@ -361,7 +363,7 @@ Redis 事务是一个单独的隔离操作：事务中所有命令都会序列�
 
 - 乐观锁：每次操作之前不上锁，但是在更新的时候会检查在此期间其他人是否已经更新过该数据。乐观锁适用于**多读**的应用类型。
 
-    > Redis 中的实现方式是 CAS（check-and-set）：更改数据之后会更改其版本号，其他人在更新数据之前会检查读取的数据的版本号与此刻数据库中的版本号是否一致（读取和更新是两个操作）
+    > 使用 Redis 的实现方式是 CAS（check-and-set）：更改数据之后会更改其版本号，其他人在更新数据之前会检查读取的数据的版本号与此刻数据库中的版本号是否一致（读取和更新是两个操作）
 
     - `watch key1 key2 ...` 在执行 `multi` 之前，先执行该命令，用于监视一个或多个 key，如果在事务执行之前这些 key 被其他命令所改动，再使用 `exec` 则所有命令都会执行失败
     
@@ -563,7 +565,7 @@ end
     - 选择偏移量最大的（偏移量指与主机同步的数据完整情况）
     - 选择 runid 最小的
 
-    挑选出新 master 后，sentinel 通过发布订阅模式通知其他的 slave，修改配置文件，让它们切换 master；当已下线的原 master 重新上线时，sentinel 会向其发送 `slaveof` 命令让其成为新 master 的 slave
+    挑选出新 master 后，sentinel **通过发布订阅模式通知其他的 slave**，修改配置文件，让它们切换 master；当已下线的原 master 重新上线时，sentinel 会向其发送 `slaveof` 命令让其成为新 master 的 slave
 
 ```mermaid
 graph LR
